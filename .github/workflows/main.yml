@@ -1,0 +1,60 @@
+name: 'Main'
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+
+  build-push-docker:
+    name: 'Build and push'
+    runs-on: 'ubuntu-latest'
+    permissions:
+      contents: 'read'
+    env:
+      IMAGE: 'docker.io/hectorm/scratch'
+      DEFINITIONS: |
+        [
+          { "tag": "amd64", "platform": ["linux", "amd64"] },
+          { "tag": "i386", "platform": ["linux", "386"] },
+          { "tag": "arm64v8", "platform": ["linux", "arm64", "v8"] },
+          { "tag": "arm32v7", "platform": ["linux", "arm", "v7"] },
+          { "tag": "arm32v6", "platform": ["linux", "arm", "v6"] },
+          { "tag": "arm32v5", "platform": ["linux", "arm", "v5"] },
+          { "tag": "riscv64", "platform": ["linux", "riscv64"] },
+          { "tag": "ppc64le", "platform": ["linux", "ppc64le"] },
+          { "tag": "mips64le", "platform": ["linux", "mips64le"] },
+          { "tag": "s390x", "platform": ["linux", "s390x"] }
+        ]
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8'
+      - name: 'Set up Docker Buildx'
+        uses: 'docker/setup-buildx-action@8c0edbc76e98fa90f69d9a2c020dcb50019dc325'
+      - name: 'Login to Docker Hub'
+        uses: 'docker/login-action@f4ef78c080cd8ba55a85445d5b36e214a81df20a'
+        with:
+          registry: 'docker.io'
+          username: '${{ secrets.DOCKERHUB_USERNAME }}'
+          password: '${{ secrets.DOCKERHUB_TOKEN }}'
+      - name: 'Build and push images'
+        run: |
+          set -eux
+          jq -nc --argjson d "${DEFINITIONS:?}" '$d[]' | while read -r def; do
+            tag=$(jq -nr --argjson d "${def:?}" '$d.tag')
+            platform=$(jq -nr --argjson d "${def:?}" '$d.platform | join("/")')
+            docker buildx build --platform "${platform:?}" --output type=image,name="${IMAGE:?}:${tag:?}",push=true ./
+          done
+      - name: 'Push manifest'
+        run: |
+          set -eux
+          docker manifest create --amend "${IMAGE:?}:latest" $(jq -nr --argjson d "${DEFINITIONS:?}" --arg i "${IMAGE:?}" '$i + ":" + $d[].tag')
+          jq -nc --argjson d "${DEFINITIONS:?}" '$d[]' | while read -r def; do
+            tag=$(jq -nr --argjson d "${def:?}" '$d.tag')
+            os=$(jq -nr --argjson d "${def:?}" '$d.platform[0] // empty')
+            arch=$(jq -nr --argjson d "${def:?}" '$d.platform[1] // empty')
+            variant=$(jq -nr --argjson d "${def:?}" '$d.platform[2] // empty')
+            docker manifest annotate "${IMAGE:?}:latest" "${IMAGE:?}:${tag:?}" ${os:+--os "${os:?}"} ${arch:+--arch "${arch:?}"} ${variant:+--variant "${variant:?}"}
+          done
+          docker manifest push "${IMAGE:?}:latest"
