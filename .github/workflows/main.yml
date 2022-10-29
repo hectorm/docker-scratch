@@ -1,6 +1,8 @@
 name: 'Main'
 
 on:
+  schedule:
+    - cron: '20 04 * * 1'
   workflow_dispatch:
 
 permissions: {}
