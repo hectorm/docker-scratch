@@ -1,21 +1,21 @@
-name: 'Main'
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: "Main"
 
 on:
   schedule:
-    - cron: '20 04 * * 1'
+    - cron: "20 04 * * 1"
   workflow_dispatch:
 
 permissions: {}
 
 jobs:
-
   build-push-docker:
-    name: 'Build and push'
-    runs-on: 'ubuntu-latest'
+    name: "Build and push"
+    runs-on: "ubuntu-latest"
     permissions:
-      contents: 'read'
+      contents: "read"
     env:
-      IMAGE: 'docker.io/hectorm/scratch'
+      IMAGE: "docker.io/hectorm/scratch"
       DEFINITIONS: |
         [
           { "tag": "amd64", "platform": ["linux", "amd64"] },
@@ -30,17 +30,17 @@ jobs:
           { "tag": "s390x", "platform": ["linux", "s390x"] }
         ]
     steps:
-      - name: 'Checkout'
-        uses: 'actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332'
-      - name: 'Set up Docker Buildx'
-        uses: 'docker/setup-buildx-action@4fd812986e6c8c2a69e18311145f9371337f27d4'
-      - name: 'Login to Docker Hub'
-        uses: 'docker/login-action@0d4c9c5ea7693da7b068278f7b52bda2a190a446'
+      - name: "Checkout"
+        uses: "actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332"
+      - name: "Set up Docker Buildx"
+        uses: "docker/setup-buildx-action@4fd812986e6c8c2a69e18311145f9371337f27d4"
+      - name: "Login to Docker Hub"
+        uses: "docker/login-action@0d4c9c5ea7693da7b068278f7b52bda2a190a446"
         with:
-          registry: 'docker.io'
-          username: '${{ secrets.DOCKERHUB_USERNAME }}'
-          password: '${{ secrets.DOCKERHUB_TOKEN }}'
-      - name: 'Build and push images'
+          registry: "docker.io"
+          username: "${{ secrets.DOCKERHUB_USERNAME }}"
+          password: "${{ secrets.DOCKERHUB_TOKEN }}"
+      - name: "Build and push images"
         run: |
           set -eux
           jq -nc --argjson d "${DEFINITIONS:?}" '$d[]' | while read -r def; do
@@ -48,7 +48,7 @@ jobs:
             platform=$(jq -nr --argjson d "${def:?}" '$d.platform | join("/")')
             docker buildx build --platform "${platform:?}" --output type=image,name="${IMAGE:?}:${tag:?}",push=true ./
           done
-      - name: 'Push manifest'
+      - name: "Push manifest"
         run: |
           set -eux
           docker manifest create --amend "${IMAGE:?}:latest" $(jq -nr --argjson d "${DEFINITIONS:?}" --arg i "${IMAGE:?}" '$i + ":" + $d[].tag')
